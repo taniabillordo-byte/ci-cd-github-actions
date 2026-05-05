@@ -1,0 +1,62 @@
+name: Deplpy to EC2
+
+# Nombre del flujo de trabajo de Integración Continua
+name: CI - Node Express
+
+# Define los eventos que disparan el flujo
+on:
+  push:
+    branches: [ "main" ] # Se ejecuta cuando hay cambios en la rama principal
+  pull_request:
+    branches: [ "main" ] # Se ejecuta cuando se crea un PR hacia la rama principal
+
+# Lista de trabajos a realizar
+jobs:
+  test:
+    # Sistema operativo sobre el que correrán las pruebas
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Descarga el código del repositorio en el contenedor
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+
+      # Paso 2: Instala y configura el entorno de Node.js
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.1 # Define la versión específica de Node a utilizar
+      
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Ejecutar pruebas
+        run: npm test
+      
+      - name: Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Agregar al host conocido
+        run: |        
+          ssh-keyscan -H ec2-3-90-210-163.compute-1.amazonaws.com >> ~/.ssh/known_hosts
+
+      - name: Copiar archivos al EC2 con rsync
+        run: |
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            ./ ubuntu@ec2-3-90-210-163.compute-1.amazonaws.com:/var/www/api_devops
+
+
+      - name: Instalar las librerias en el servidor
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@ec2-3-90-210-163.compute-1.amazonaws.com \
+          "cd /var/www/api_devops && npm install"
+
+      - name: Reiniciar PM2 correctamente
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@ec2-3-90-210-163.compute-1.amazonaws.com \
+            "pm2 restart api_devops || pm2 start /var/www/api_devops/server.js --name api_devops"

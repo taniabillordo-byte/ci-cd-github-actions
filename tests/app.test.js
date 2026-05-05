@@ -17,6 +17,6 @@ describe("GET /", () => {
         expect(res.statusCode).toBe(200);
 
         // Verifica que el contenido del mensaje en el cuerpo sea el esperado
-        expect(res.body.message).toBe("API Funcionando perfecto");
+        expect(res.body.message).toBe("API Funcionando");
     });
 });
